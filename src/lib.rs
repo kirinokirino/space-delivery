@@ -57,7 +57,6 @@ fn start() {
     unsafe {
         *wasm4::PALETTE = [0x002d_162c, 0x0041_2752, 0x0068_3a68, 0x0097_75a6];
         *wasm4::DRAW_COLORS = 0x4321;
-        //WORLD.gen_planet(Vec2::new(0., 0.));
     }
 }
 

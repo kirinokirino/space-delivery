@@ -82,6 +82,13 @@ impl Rect {
             self.top_left.y + (f32::from(self.height) / 2.),
         )
     }
+
+    pub fn center_mul(&self, mul: f32) -> Vec2 {
+        Vec2::new(
+            self.top_left.x + (f32::from(self.width) * mul / 2.),
+            self.top_left.y + (f32::from(self.height) * mul / 2.),
+        )
+    }
 }
 
 pub fn map(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {

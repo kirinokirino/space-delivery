@@ -4,21 +4,22 @@ use crate::player::Player;
 use crate::wasm4;
 use heapless::HistoryBuffer;
 
-const ROTATE_THE_WORLD: bool = true;
 pub struct World {
     view: Rect,
     player: Player,
     planets: HistoryBuffer<Planet, 255>,
-
+    stars: HistoryBuffer<Star, 255>,
     seconds_passed: u32,
 }
 
 impl World {
     pub const fn new() -> Self {
+        let stars = HistoryBuffer::new();
         Self {
             view: Rect::new(Vec2::new(-80.0, -80.0)),
             player: Player::new(Vec2::new(0.0, 0.0)),
             planets: HistoryBuffer::new(),
+            stars,
             seconds_passed: 0,
         }
     }
@@ -54,13 +55,29 @@ impl World {
                 ),
                 random.rand_float() * 30. + 5.,
             );
-            if self.planets.iter().all(|planet| {
-                planet.pos.distance(possible_planet.pos)
-                    > ((planet.radius + possible_planet.radius) * 3.0)
-                    && possible_planet.pos.distance(player_pos) > 114.0 + possible_planet.radius
-            }) {
-                self.planets.write(possible_planet);
+            if possible_planet.pos.distance(player_pos) > 114.0 + possible_planet.radius {
+                if self.planets.iter().all(|planet| {
+                    planet.pos.distance(possible_planet.pos)
+                        > ((planet.radius + possible_planet.radius) * 3.0)
+                }) {
+                    self.planets.write(possible_planet);
+                }
             }
+        }
+
+        if self.count_stars() < 35 {
+            self.gen_star(random);
+        }
+    }
+
+    fn gen_star(&mut self, mut random: oorandom::Rand32) {
+        let star = Star::new(Vec2::new(
+            self.view.center_mul(3.0).x + (random.rand_float() - 0.5) * 1000.,
+            self.view.center_mul(3.0).y + (random.rand_float() - 0.5) * 1000.,
+        ));
+        let distance = star.pos.distance(self.view.center_mul(3.0));
+        if distance > 114.0 * 3.0 && distance < 114.0 * 5.0 {
+            self.stars.write(star);
         }
     }
 
@@ -76,8 +93,21 @@ impl World {
             .count() as u8
     }
 
+    pub fn count_stars(&self) -> u8 {
+        self.stars
+            .iter()
+            .filter(|star| star.pos.distance(self.view.center_mul(3.0)) < 114.0 * 5.0)
+            .count() as u8
+    }
+
     pub fn draw(&self) {
         let view = &self.view;
+        self.stars
+            .as_slice()
+            .iter()
+            .filter(|star| star.pos.distance(self.view.center_mul(3.0)) < 114.0 * 3.0)
+            .for_each(|star| star.draw(view));
+
         self.planets
             .as_slice()
             .iter()
@@ -120,6 +150,32 @@ impl Planet {
                     255.0, //self.color_end as f32,
                 );
                 draw_pixel(u32::from(screen_x), u32::from(screen_y), color as u8);
+            }
+        }
+    }
+}
+
+struct Star {
+    pos: Vec2,
+}
+
+impl Star {
+    pub const fn new(pos: Vec2) -> Self {
+        Self { pos }
+    }
+
+    pub fn draw(&self, view: &Rect) {
+        let left = view.top_left.x / 3.0;
+        let top = view.top_left.y / 3.0;
+
+        for screen_y in 0..160u8 {
+            for screen_x in 0..160u8 {
+                let screen_point = Vec2::new(f32::from(screen_x) + left, f32::from(screen_y) + top);
+                let distance = (self.pos * (1. / 3.)).distance(screen_point);
+                if distance > 2.0 {
+                    continue;
+                }
+                draw_pixel(u32::from(screen_x), u32::from(screen_y), 100);
             }
         }
     }
