@@ -1,15 +1,18 @@
 use crate::common::{map, Rect, Vec2};
 use crate::gfx::draw_pixel;
+use crate::particle::PhysicsObject;
 use crate::player::Player;
 use crate::wasm4;
 use core::f32::consts::PI;
-use heapless::HistoryBuffer;
+use heapless::{HistoryBuffer, Vec};
 pub struct World {
     view: Rect,
     player: Player,
     planets: HistoryBuffer<Planet, 255>,
     stars: HistoryBuffer<Star, 255>,
+    particles: Vec<PhysicsObject, 255>,
     seconds_passed: u32,
+    pub mouse_clicked: bool,
 }
 
 impl World {
@@ -19,8 +22,10 @@ impl World {
             view: Rect::new(Vec2::new(-80.0, -80.0)),
             player: Player::new(Vec2::new(0.0, 0.0), true),
             planets: HistoryBuffer::new(),
+            particles: Vec::new(),
             stars,
             seconds_passed: 0,
+            mouse_clicked: false,
         }
     }
 
@@ -29,11 +34,15 @@ impl World {
     }
 
     pub fn mouse_click(&mut self, mouse: (i16, i16)) {
-        let (x, y) = mouse;
-        let pos = Vec2::new(
-            self.view.top_left.x + f32::from(x),
-            self.view.top_left.y + f32::from(y),
-        );
+        if !self.mouse_clicked {
+            let (x, y) = mouse;
+            let pos = Vec2::new(
+                self.view.top_left.x + f32::from(x),
+                self.view.top_left.y + f32::from(y),
+            );
+            self.particles.push(PhysicsObject::new(pos));
+            self.mouse_clicked = true;
+        }
     }
 
     pub fn update(&mut self, time: f64) {
@@ -45,7 +54,7 @@ impl World {
             let distance = delta.magnitude();
             if distance < 114.0 * 3.0 && distance > planet.radius {
                 let force = planet.radius * PI / (distance * distance);
-                self.player.apply_force(delta.normalized() * force);
+                self.player.apply_force(delta.normalized() * force * 0.1);
             }
         }
         self.player.update();
@@ -57,14 +66,14 @@ impl World {
 
         if self.count_planets() < 20 {
             let planet_size: u8 =
-                unsafe { (random.rand_u32() % 200).try_into().unwrap_unchecked() };
+                unsafe { (random.rand_u32() % 100).try_into().unwrap_unchecked() };
             let possible_planet = Planet::new(
                 Vec2::new(
                     self.view.center().x + (random.rand_float() - 0.5) * 300.,
                     self.view.center().y + (random.rand_float() - 0.5) * 300.,
                 ),
                 random.rand_float() * 30. + 5.,
-                planet_size + 55u8,
+                planet_size + 155u8,
             );
             #[allow(clippy::collapsible_if)]
             if possible_planet.pos.distance(player_pos) > 114.0 + possible_planet.radius {
@@ -79,6 +88,18 @@ impl World {
 
         if self.count_stars() < 35 {
             self.gen_star(random);
+        }
+
+        for particle in &mut self.particles {
+            for planet in self.planets.as_slice() {
+                let delta = planet.pos - particle.pos;
+                let distance = delta.magnitude();
+                if distance < 114.0 * 3.0 && distance > planet.radius {
+                    let force = planet.radius * PI / (distance * distance);
+                    particle.apply_force(delta.normalized() * force);
+                }
+            }
+            particle.update();
         }
     }
 
@@ -129,6 +150,11 @@ impl World {
             .iter()
             .filter(|planet| planet.pos.distance(self.view.center()) < 114.0 + planet.radius)
             .for_each(|planet| planet.draw(view));
+
+        self.particles
+            .iter()
+            .filter(|particle| particle.pos.distance(self.view.center()) < 114.0)
+            .for_each(|particle| particle.debug_draw(view));
 
         let planets = self.count_planets();
         wasm4::line(10, 130, 10, 130 - i32::from(planets));

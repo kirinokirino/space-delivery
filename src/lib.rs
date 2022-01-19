@@ -34,6 +34,7 @@
 #![allow(clippy::suboptimal_flops)]
 mod common;
 mod gfx;
+mod particle;
 mod player;
 mod wasm4;
 mod world;
@@ -75,6 +76,10 @@ fn update() {
     if mouse_pressed != 0 {
         unsafe {
             WORLD.mouse_click(mouse);
+        }
+    } else {
+        unsafe {
+            WORLD.mouse_clicked = false;
         }
     }
 
