@@ -25,10 +25,10 @@ impl Vec2 {
 
     pub fn normalized(self) -> Self {
         let magnitude = self.magnitude();
-        if abs(magnitude) < f32::EPSILON && abs(magnitude - 1.0) < f32::EPSILON {
-            self / magnitude
-        } else {
+        if abs(magnitude) < f32::EPSILON || abs(magnitude - 1.0) < f32::EPSILON {
             self
+        } else {
+            self / magnitude
         }
     }
 
@@ -82,7 +82,7 @@ impl Mul<f32> for Vec2 {
 impl Div<f32> for Vec2 {
     type Output = Self;
     fn div(self, other: f32) -> Self {
-        if abs(other) < f32::EPSILON {
+        if abs(other) > f32::EPSILON {
             Self {
                 x: self.x / other,
                 y: self.y / other,

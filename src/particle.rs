@@ -3,12 +3,12 @@ use crate::gfx::draw_pixel;
 
 pub struct PhysicsObject {
     pub pos: Vec2,
-    vel: Vec2,
+    pub vel: Vec2,
     acc: Vec2,
 }
 
 impl PhysicsObject {
-    pub fn new(pos: Vec2) -> Self {
+    pub const fn new(pos: Vec2) -> Self {
         Self {
             pos,
             vel: Vec2::new(0.0, 0.0),
@@ -24,7 +24,7 @@ impl PhysicsObject {
     }
 
     pub fn apply_force(&mut self, force: Vec2) {
-        self.acc += force * 0.1;
+        self.acc += force;
     }
 
     pub fn debug_draw(&self, view: &Rect) {

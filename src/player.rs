@@ -1,72 +1,50 @@
-use crate::common::{Rect, Vec2};
+use crate::common::{abs, Rect, Vec2};
+use crate::particle::PhysicsObject;
 use crate::wasm4;
-use core::f32::consts::PI;
 
-const ROT_POWER: f32 = 0.001;
-const POWER: f32 = 0.02;
+const POWER: f32 = 0.05;
+const MAX_SPEED: f32 = 2.0;
 
 pub struct Player {
-    pub pos: Vec2,
-    pub is_ai: bool,
-    force: Vec2,
-    vel: f32,
-    acc: f32,
-    rot: f32,
-    rot_vel: f32,
-    rot_acc: f32,
+    pub physics: PhysicsObject,
 }
 
 impl Player {
     pub const fn new(pos: Vec2, is_ai: bool) -> Self {
         Self {
-            pos,
-            is_ai,
-            force: Vec2::new(0.0, 0.0),
-            vel: 0.0,
-            acc: 0.0,
-            rot: PI,
-            rot_vel: 0.0,
-            rot_acc: 0.0,
+            physics: PhysicsObject::new(pos),
         }
     }
 
     pub fn handle_gamepad(&mut self, gamepad: u8) {
-        if gamepad & wasm4::BUTTON_LEFT != 0 {
-            self.rot_acc = -ROT_POWER;
-            self.is_ai = false;
-        } else if gamepad & wasm4::BUTTON_RIGHT != 0 {
-            self.rot_acc = ROT_POWER;
-            self.is_ai = false;
-        }
-        if gamepad & wasm4::BUTTON_UP != 0 {
-            self.acc = POWER;
-            self.is_ai = false;
-        } else if gamepad & wasm4::BUTTON_DOWN != 0 {
-            self.acc = -POWER;
-            self.is_ai = false;
-        }
-        if self.is_ai {
-            let mut random = oorandom::Rand32::new(unsafe { crate::FRAME_COUNT.into() });
-            self.rot_acc = (random.rand_float() - 0.4) * ROT_POWER;
-            self.acc = (random.rand_float() - 0.5) * POWER;
+        if gamepad & wasm4::BUTTON_1 != 0 {
+            let speed = self.physics.vel;
+            let delta_x = MAX_SPEED - abs(speed.x);
+            let delta_y = MAX_SPEED - abs(speed.y);
+            let mut force = Vec2::new(0.0, -POWER * delta_y);
+            if gamepad & wasm4::BUTTON_LEFT != 0 {
+                force += Vec2::new(-POWER * delta_x, 0.0);
+            } else if gamepad & wasm4::BUTTON_RIGHT != 0 {
+                force += Vec2::new(POWER * delta_x, 0.0);
+            }
+            self.apply_force(force);
         }
     }
 
     pub fn update(&mut self) {
-        self.vel += self.acc;
-        self.rot_vel += self.rot_acc;
-        self.rot_vel *= 0.98;
-        self.rot += self.rot_vel;
-        self.pos += (Vec2::new(0.0, self.vel).rotated(self.rot));
-        self.pos += self.force;
+        self.physics.update();
 
-        self.force = Vec2::new(0.0, 0.0);
-        self.acc = 0.0;
-        self.rot_acc = 0.0;
+        if self.physics.vel.magnitude() > MAX_SPEED {
+            self.physics.vel = self.physics.vel.normalized() * MAX_SPEED;
+        }
     }
 
-    pub fn apply_force(&mut self, delta: Vec2) {
-        self.force += delta;
+    pub fn apply_force(&mut self, force: Vec2) {
+        self.physics.apply_force(force);
+    }
+
+    pub fn collide(&mut self) {
+        self.apply_force(self.physics.vel * -1.0);
     }
 
     #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
@@ -74,11 +52,11 @@ impl Player {
         let left = view.top_left.x;
         let top = view.top_left.y;
 
-        let x1 = self.pos.x - left;
-        let y1 = self.pos.y - top;
+        let x1 = self.physics.pos.x - left;
+        let y1 = self.physics.pos.y - top;
 
         let start = Vec2::new(x1, y1 - 4.0);
-        let end = Vec2::new(0.0, self.vel).rotated(self.rot) * 4.0 + start;
+        let end = self.physics.vel + start;
         unsafe {
             *wasm4::DRAW_COLORS = 4;
         }

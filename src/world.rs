@@ -48,13 +48,13 @@ impl World {
     pub fn update(&mut self, time: f64) {
         let mut random = oorandom::Rand32::new(unsafe { crate::FRAME_COUNT.into() });
 
-        let player_pos = self.player.pos;
+        let player_pos = self.player.physics.pos;
         for planet in self.planets.as_slice() {
             let delta = planet.pos - player_pos;
             let distance = delta.magnitude();
             if distance < 114.0 * 3.0 && distance > planet.radius {
                 let force = planet.radius * PI / (distance * distance);
-                self.player.apply_force(delta.normalized() * force * 0.1);
+                self.player.apply_force(delta.normalized() * force);
             }
         }
         self.player.update();
@@ -96,7 +96,7 @@ impl World {
                 let distance = delta.magnitude();
                 if distance < 114.0 * 3.0 && distance > planet.radius {
                     let force = planet.radius * PI / (distance * distance);
-                    particle.apply_force(delta.normalized() * force);
+                    particle.apply_force(delta.normalized() * force * 0.1);
                 }
             }
             particle.update();
