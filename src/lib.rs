@@ -31,7 +31,7 @@
     clippy::as_conversions,
     clippy::verbose_file_reads
 )]
-#[allow(clippy::suboptimal_flops)]
+#![allow(clippy::suboptimal_flops)]
 mod common;
 mod gfx;
 mod player;

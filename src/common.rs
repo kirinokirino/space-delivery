@@ -1,5 +1,5 @@
 use core::f32::consts::{FRAC_1_PI, PI};
-use core::ops::{Add, AddAssign, Mul};
+use core::ops::{Add, AddAssign, Div, Mul, Sub};
 
 #[derive(Clone, Copy)]
 pub struct Vec2 {
@@ -19,7 +19,20 @@ impl Vec2 {
         sqrt(delta_x * delta_x + delta_y * delta_y)
     }
 
-    pub fn rotated(&self, rad: f32) -> Self {
+    pub fn magnitude(self) -> f32 {
+        sqrt(self.x * self.x + self.y * self.y)
+    }
+
+    pub fn normalized(self) -> Self {
+        let magnitude = self.magnitude();
+        if abs(magnitude) < f32::EPSILON && abs(magnitude - 1.0) < f32::EPSILON {
+            self / magnitude
+        } else {
+            self
+        }
+    }
+
+    pub fn rotated(self, rad: f32) -> Self {
         Self {
             x: self.x * cos(rad) - self.y * sin(rad),
             y: self.x * sin(rad) + self.y * cos(rad),
@@ -46,12 +59,36 @@ impl AddAssign for Vec2 {
     }
 }
 
+impl Sub for Vec2 {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+}
+
 impl Mul<f32> for Vec2 {
     type Output = Self;
     fn mul(self, other: f32) -> Self {
         Self {
             x: self.x * other,
             y: self.y * other,
+        }
+    }
+}
+
+impl Div<f32> for Vec2 {
+    type Output = Self;
+    fn div(self, other: f32) -> Self {
+        if abs(other) < f32::EPSILON {
+            Self {
+                x: self.x / other,
+                y: self.y / other,
+            }
+        } else {
+            self
         }
     }
 }

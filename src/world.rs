@@ -2,8 +2,8 @@ use crate::common::{map, Rect, Vec2};
 use crate::gfx::draw_pixel;
 use crate::player::Player;
 use crate::wasm4;
+use core::f32::consts::PI;
 use heapless::HistoryBuffer;
-
 pub struct World {
     view: Rect,
     player: Player,
@@ -17,7 +17,7 @@ impl World {
         let stars = HistoryBuffer::new();
         Self {
             view: Rect::new(Vec2::new(-80.0, -80.0)),
-            player: Player::new(Vec2::new(0.0, 0.0)),
+            player: Player::new(Vec2::new(0.0, 0.0), true),
             planets: HistoryBuffer::new(),
             stars,
             seconds_passed: 0,
@@ -39,8 +39,16 @@ impl World {
     pub fn update(&mut self, time: f64) {
         let mut random = oorandom::Rand32::new(unsafe { crate::FRAME_COUNT.into() });
 
-        self.player.update();
         let player_pos = self.player.pos;
+        for planet in self.planets.as_slice() {
+            let delta = planet.pos - player_pos;
+            let distance = delta.magnitude();
+            if distance < 114.0 * 3.0 && distance > planet.radius {
+                let force = planet.radius * PI / (distance * distance);
+                self.player.apply_force(delta.normalized() * force);
+            }
+        }
+        self.player.update();
         self.change_view(player_pos);
 
         if self.seconds_passed < time as u32 {
@@ -48,13 +56,17 @@ impl World {
         }
 
         if self.count_planets() < 20 {
+            let planet_size: u8 =
+                unsafe { (random.rand_u32() % 200).try_into().unwrap_unchecked() };
             let possible_planet = Planet::new(
                 Vec2::new(
                     self.view.center().x + (random.rand_float() - 0.5) * 300.,
                     self.view.center().y + (random.rand_float() - 0.5) * 300.,
                 ),
                 random.rand_float() * 30. + 5.,
+                planet_size + 55u8,
             );
+            #[allow(clippy::collapsible_if)]
             if possible_planet.pos.distance(player_pos) > 114.0 + possible_planet.radius {
                 if self.planets.iter().all(|planet| {
                     planet.pos.distance(possible_planet.pos)
@@ -71,10 +83,14 @@ impl World {
     }
 
     fn gen_star(&mut self, mut random: oorandom::Rand32) {
-        let star = Star::new(Vec2::new(
-            self.view.center_mul(3.0).x + (random.rand_float() - 0.5) * 1000.,
-            self.view.center_mul(3.0).y + (random.rand_float() - 0.5) * 1000.,
-        ));
+        let star = Star::new(
+            Vec2::new(
+                self.view.center_mul(3.0).x + (random.rand_float() - 0.5) * 1000.,
+                self.view.center_mul(3.0).y + (random.rand_float() - 0.5) * 1000.,
+            ),
+            unsafe { (random.rand_u32() % 200).try_into().unwrap_unchecked() },
+            random.rand_float() * 2.0 + 0.5,
+        );
         let distance = star.pos.distance(self.view.center_mul(3.0));
         if distance > 114.0 * 3.0 && distance < 114.0 * 5.0 {
             self.stars.write(star);
@@ -124,11 +140,12 @@ impl World {
 struct Planet {
     pos: Vec2,
     radius: f32,
+    color: u8,
 }
 
 impl Planet {
-    pub const fn new(pos: Vec2, radius: f32) -> Self {
-        Self { pos, radius }
+    pub const fn new(pos: Vec2, radius: f32, color: u8) -> Self {
+        Self { pos, radius, color }
     }
 
     pub fn draw(&self, view: &Rect) {
@@ -146,10 +163,10 @@ impl Planet {
                     distance,
                     0.0,
                     self.radius,
-                    0.0,   //self.color_center as f32,
-                    255.0, //self.color_end as f32,
+                    0.0,                   //self.color_center as f32,
+                    f32::from(self.color), //self.color_end as f32,
                 );
-                draw_pixel(u32::from(screen_x), u32::from(screen_y), color as u8);
+                draw_pixel(screen_x, screen_y, color as u8);
             }
         }
     }
@@ -157,11 +174,13 @@ impl Planet {
 
 struct Star {
     pos: Vec2,
+    color: u8,
+    size: f32,
 }
 
 impl Star {
-    pub const fn new(pos: Vec2) -> Self {
-        Self { pos }
+    pub const fn new(pos: Vec2, color: u8, size: f32) -> Self {
+        Self { pos, color, size }
     }
 
     pub fn draw(&self, view: &Rect) {
@@ -172,10 +191,10 @@ impl Star {
             for screen_x in 0..160u8 {
                 let screen_point = Vec2::new(f32::from(screen_x) + left, f32::from(screen_y) + top);
                 let distance = (self.pos * (1. / 3.)).distance(screen_point);
-                if distance > 2.0 {
+                if distance > self.size {
                     continue;
                 }
-                draw_pixel(u32::from(screen_x), u32::from(screen_y), 100);
+                draw_pixel(screen_x, screen_y, self.color);
             }
         }
     }
