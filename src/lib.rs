@@ -66,25 +66,21 @@ fn update() {
     let time = unsafe { f64::from(FRAME_COUNT) / 60. };
     let mut random = unsafe { oorandom::Rand32::new(FRAME_COUNT.into()) };
     let gamepad = unsafe { *wasm4::GAMEPAD1 };
-    unsafe {
-        WORLD.handle_gamepad(gamepad);
-    }
-
     let mouse = unsafe { (*wasm4::MOUSE_X, *wasm4::MOUSE_Y) };
     let mouse_pressed = unsafe { *wasm4::MOUSE_BUTTONS & wasm4::MOUSE_LEFT };
 
-    if mouse_pressed != 0 {
+    if mouse_pressed == 0 {
         unsafe {
-            WORLD.mouse_click(mouse);
+            WORLD.mouse_clicked = false;
         }
     } else {
         unsafe {
-            WORLD.mouse_clicked = false;
+            WORLD.mouse_click(mouse);
         }
     }
 
     unsafe {
-        WORLD.update(time);
+        WORLD.update(time, gamepad);
     }
 
     unsafe {

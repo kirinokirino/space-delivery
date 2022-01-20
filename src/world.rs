@@ -1,6 +1,6 @@
 use crate::common::{map, Rect, Vec2};
 use crate::gfx::draw_pixel;
-use crate::particle::PhysicsObject;
+use crate::particle::{PhysicsObject, MAX_LIFETIME};
 use crate::player::Player;
 use crate::wasm4;
 use core::f32::consts::PI;
@@ -13,6 +13,7 @@ pub struct World {
     particles: Vec<PhysicsObject, 255>,
     seconds_passed: u32,
     pub mouse_clicked: bool,
+    score: u16,
 }
 
 impl World {
@@ -20,17 +21,18 @@ impl World {
         let stars = HistoryBuffer::new();
         Self {
             view: Rect::new(Vec2::new(-80.0, -80.0)),
-            player: Player::new(Vec2::new(0.0, 0.0), true),
+            player: Player::new(Vec2::new(0.0, 0.0)),
             planets: HistoryBuffer::new(),
             particles: Vec::new(),
             stars,
             seconds_passed: 0,
             mouse_clicked: false,
+            score: 0,
         }
     }
 
-    pub fn handle_gamepad(&mut self, gamepad: u8) {
-        self.player.handle_gamepad(gamepad);
+    fn handle_gamepad(&mut self, gamepad: u8) -> Option<Vec2> {
+        self.player.handle_gamepad(gamepad)
     }
 
     pub fn mouse_click(&mut self, mouse: (i16, i16)) {
@@ -40,21 +42,28 @@ impl World {
                 self.view.top_left.x + f32::from(x),
                 self.view.top_left.y + f32::from(y),
             );
-            self.particles.push(PhysicsObject::new(pos));
+            let player = &self.player.physics;
+            self.gen_particle(player.pos, (pos - player.pos).normalized() * 1.50);
             self.mouse_clicked = true;
         }
     }
 
-    pub fn update(&mut self, time: f64) {
+    pub fn update(&mut self, time: f64, gamepad: u8) {
         let mut random = oorandom::Rand32::new(unsafe { crate::FRAME_COUNT.into() });
-
         let player_pos = self.player.physics.pos;
+        if let Some(particle_force) = self.handle_gamepad(gamepad) {
+            if random.rand_float() < 0.1 {
+                self.gen_particle(player_pos, particle_force);
+            }
+        }
         for planet in self.planets.as_slice() {
             let delta = planet.pos - player_pos;
             let distance = delta.magnitude();
-            if distance < 114.0 * 3.0 && distance > planet.radius {
-                let force = planet.radius * PI / (distance * distance);
-                self.player.apply_force(delta.normalized() * force);
+            if distance < 114.0 * 3.0 && distance > planet.radius + 2.0 {
+                let force = planet.gravity(distance);
+                self.player.apply_force(delta.normalized() * force * 0.4);
+            } else if distance < planet.radius {
+                self.player.collide(delta);
             }
         }
         self.player.update();
@@ -94,12 +103,26 @@ impl World {
             for planet in self.planets.as_slice() {
                 let delta = planet.pos - particle.pos;
                 let distance = delta.magnitude();
-                if distance < 114.0 * 3.0 && distance > planet.radius {
-                    let force = planet.radius * PI / (distance * distance);
-                    particle.apply_force(delta.normalized() * force * 0.1);
+                if distance < 114.0 * 3.0 && distance > planet.radius + 2.0 {
+                    let force = planet.gravity(distance);
+                    particle.apply_force(delta.normalized() * force);
                 }
             }
             particle.update();
+        }
+    }
+
+    fn gen_particle(&mut self, pos: Vec2, force: Vec2) {
+        let mut particle = PhysicsObject::new(pos, Some(MAX_LIFETIME));
+        particle.apply_force(force);
+        match self.particles.push(particle) {
+            Ok(_) => (),
+            Err(particle) => {
+                self.particles.clear();
+                unsafe {
+                    self.particles.push_unchecked(particle);
+                }
+            }
         }
     }
 
@@ -156,9 +179,6 @@ impl World {
             .filter(|particle| particle.pos.distance(self.view.center()) < 114.0)
             .for_each(|particle| particle.debug_draw(view));
 
-        let planets = self.count_planets();
-        wasm4::line(10, 130, 10, 130 - i32::from(planets));
-
         self.player.draw(view);
     }
 }
@@ -174,6 +194,11 @@ impl Planet {
         Self { pos, radius, color }
     }
 
+    pub fn gravity(&self, distance: f32) -> f32 {
+        let distance_to_surface = distance - (self.radius - 2.0);
+        self.radius / (distance_to_surface * distance_to_surface)
+    }
+
     pub fn draw(&self, view: &Rect) {
         let left = view.top_left.x;
         let top = view.top_left.y;
@@ -185,13 +210,7 @@ impl Planet {
                 if distance > self.radius {
                     continue;
                 }
-                let color = map(
-                    distance,
-                    0.0,
-                    self.radius,
-                    0.0,                   //self.color_center as f32,
-                    f32::from(self.color), //self.color_end as f32,
-                );
+                let color = map(distance, 0.0, self.radius, 0.0, f32::from(self.color));
                 draw_pixel(screen_x, screen_y, color as u8);
             }
         }
