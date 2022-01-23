@@ -2,6 +2,8 @@ use crate::common::{abs, clamp, Rect, Vec2};
 use crate::particle::{PhysicsObject, MAX_LIFETIME};
 use crate::wasm4;
 
+use core::f32::consts::PI;
+
 const POWER: f32 = 0.02;
 const MAX_SPEED: f32 = 2.0;
 
@@ -66,6 +68,35 @@ impl Player {
 
     pub fn collide(&mut self, to_collider: Vec2) {
         self.apply_force(self.physics.vel * -0.2);
+    }
+
+    #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
+    pub fn draw2(&self, view: &Rect) {
+        let size = 3;
+
+        let left = view.top_left.x;
+        let top = view.top_left.y;
+
+        let x1 = self.physics.pos.x - left;
+        let y1 = self.physics.pos.y - top;
+
+        let start = Vec2::new(x1, y1 - 3.0);
+        let front = self.physics.vel * 1.5 + start;
+        let right = self.physics.vel.rotated(PI / 2.0) + start;
+        let back = self.physics.vel * -1.5 + start;
+        let left = self.physics.vel.rotated(-PI / 2.0) + start;
+        unsafe {
+            *wasm4::DRAW_COLORS = 4;
+        }
+        wasm4::line(left.x as i32, left.y as i32, front.x as i32, front.y as i32);
+        wasm4::line(
+            right.x as i32,
+            right.y as i32,
+            front.x as i32,
+            front.y as i32,
+        );
+        wasm4::line(left.x as i32, left.y as i32, back.x as i32, back.y as i32);
+        wasm4::line(right.x as i32, right.y as i32, back.x as i32, back.y as i32);
     }
 
     #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]

@@ -1,3 +1,4 @@
+use crate::arrangement::{Arrangement, Sequence, Wave};
 use crate::common::{map, Rect, Vec2};
 use crate::gfx::draw_pixel;
 use crate::particle::{PhysicsObject, MAX_LIFETIME};
@@ -14,6 +15,7 @@ pub struct World {
     seconds_passed: u32,
     pub mouse_clicked: bool,
     score: u16,
+    target_planet: Option<Planet>,
 }
 
 impl World {
@@ -28,6 +30,7 @@ impl World {
             seconds_passed: 0,
             mouse_clicked: false,
             score: 0,
+            target_planet: None,
         }
     }
 
@@ -48,12 +51,12 @@ impl World {
         }
     }
 
-    pub fn update(&mut self, time: f64, gamepad: u8) {
+    pub fn update(&mut self, time: f64, gamepad: u8, music: &mut Arrangement) {
         let mut random = oorandom::Rand32::new(unsafe { crate::FRAME_COUNT.into() });
         let player_pos = self.player.physics.pos;
         if let Some(particle_force) = self.handle_gamepad(gamepad) {
             if random.rand_float() < 0.1 {
-                self.gen_particle(player_pos, particle_force);
+                self.gen_particle(player_pos + Vec2::new(0.0, -3.0), particle_force);
             }
         }
         for planet in self.planets.as_slice() {
@@ -71,6 +74,35 @@ impl World {
 
         if self.seconds_passed < time as u32 {
             self.seconds_passed += 1;
+            match &self.target_planet.clone() {
+                Some(target) => {
+                    let distance = player_pos.distance(target.pos);
+                    if distance < target.radius {
+                        self.score += 1;
+                        music.try_add_pattern(
+                            Wave::Pulse2,
+                            Sequence::gen_pattern(11, random.rand_float()),
+                        );
+                        for _ in 0..20 {
+                            self.gen_particle(
+                                target.pos,
+                                Vec2::new(5.0, 0.0).rotated(random.rand_float() * PI * 2.0),
+                            );
+                        }
+                        self.target_planet = None;
+                    } else if distance > 1_000.0 {
+                        self.target_planet = None;
+                    }
+                }
+                None => loop {
+                    let planet = random.rand_range(0..self.planets.len() as u32) as usize;
+                    let possible_planet = self.planets.as_slice()[planet].clone();
+                    if possible_planet.pos.distance(player_pos) < 700.0 {
+                        self.target_planet = Some(possible_planet);
+                        break;
+                    }
+                },
+            }
         }
 
         if self.count_planets() < 20 {
@@ -179,10 +211,33 @@ impl World {
             .filter(|particle| particle.pos.distance(self.view.center()) < 114.0)
             .for_each(|particle| particle.debug_draw(view));
 
-        self.player.draw(view);
+        unsafe {
+            *wasm4::DRAW_COLORS = 4;
+        }
+
+        let padding = 5;
+        if let Some(target) = &self.target_planet {
+            let player_pos = self.player.physics.pos;
+            let distance = target.pos.distance(player_pos);
+            let detector_size = map(distance, 0.0, 1_000.0, 1.0, 150.0);
+            wasm4::line(
+                padding,
+                160 - padding,
+                padding + detector_size as i32,
+                160 - padding,
+            );
+        }
+        wasm4::line(
+            padding,
+            160 - 2 * padding,
+            padding + i32::from(self.score % 150),
+            160 - 2 * padding,
+        );
+        self.player.draw2(view);
     }
 }
 
+#[derive(Clone)]
 struct Planet {
     pos: Vec2,
     radius: f32,

@@ -32,6 +32,8 @@
     clippy::verbose_file_reads
 )]
 #![allow(clippy::suboptimal_flops)]
+mod arrangement;
+use arrangement::{Arrangement, Channel, Sequence, Wave};
 mod common;
 mod gfx;
 mod particle;
@@ -49,7 +51,14 @@ const CURSOR_SIZE: u8 = 4;
 const MOUSE_CURSOR: [u8; 2] = [0b1110_1000, 0b1010_0001];
 
 static mut FRAME_COUNT: u32 = 0;
+const FRAMES_PER_TICK: u16 = 7;
 static mut WORLD: World = World::new();
+static mut MUSIC: Arrangement = Arrangement::new(
+    None,
+    Some(Channel::new(Wave::Pulse1)),
+    Some(Channel::new(Wave::Pulse2)),
+    Some(Channel::new(Wave::Noise)),
+);
 
 #[no_mangle]
 fn start() {
@@ -64,10 +73,17 @@ fn start() {
 #[no_mangle]
 fn update() {
     let time = unsafe { f64::from(FRAME_COUNT) / 60. };
+    let frame = unsafe { FRAME_COUNT };
     let mut random = unsafe { oorandom::Rand32::new(FRAME_COUNT.into()) };
     let gamepad = unsafe { *wasm4::GAMEPAD1 };
     let mouse = unsafe { (*wasm4::MOUSE_X, *wasm4::MOUSE_Y) };
     let mouse_pressed = unsafe { *wasm4::MOUSE_BUTTONS & wasm4::MOUSE_LEFT };
+    let music = unsafe { &mut MUSIC };
+
+    music.try_add_pattern(Wave::Pulse1, Sequence::gen_pattern(0, random.rand_float()));
+    if frame % u32::from(FRAMES_PER_TICK) == 0 {
+        music.update(1);
+    }
 
     if mouse_pressed == 0 {
         unsafe {
@@ -77,10 +93,11 @@ fn update() {
         unsafe {
             WORLD.mouse_click(mouse);
         }
+        music.try_add_pattern(Wave::Noise, Sequence::gen_pattern(10, random.rand_float()));
     }
 
     unsafe {
-        WORLD.update(time, gamepad);
+        WORLD.update(time, gamepad, music);
     }
 
     unsafe {

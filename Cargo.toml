@@ -1,6 +1,6 @@
 [package]
 name = "cart"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,8 +13,10 @@ heapless = { version = "0.7", default-features = false }
 oorandom = "11"
 
 [profile.release]
-opt-level = "z"
+debug = false
+opt-level = 3
 lto = true
+codegen-units = 1
 
 [features]
 # use `--no-default-features` or comment out next line to disable allocator
