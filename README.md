@@ -1,6 +1,8 @@
 # space-delivery
 Wasm-4 game jam entry.
 
+![Screenshot](https://img.itch.zone/aW1hZ2UvMTM2NTA2OS83OTYwNzM1LnBuZw==/347x500/ADphmB.png)
+
 Explore the space at your own leisure. If you'd like, you can find and land on a specific 
 planet. The bottom line shows the distance to that planet, you probably 
 would need to fly around a bit to find where it is. 
